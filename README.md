@@ -20,7 +20,7 @@ Here’s what we suggest:
 1. Request to join the [TensorFlow NW slack workspace](https://tf-nw.slack.com/) by contacting Bryan Holman at bryanpholman [at] gmail [dot] com. Once you are given access, introduce yourself to the other members of the group!
 2. Head over to [kaggle.com](https://www.kaggle.com/) and register and check out the site!
 3. Get introduced to [Kaggle Kernels](https://www.youtube.com/watch?v=FloMHMOU5Bs)!
-4. Enter your [first Kaggle competition](https://www.kaggle.com/c/digit-recognizer), recognizing hand-written numbers with the classic MNIST dataset. We have prepared [this guide](link!) for entering the competition, building your first kernel, and submitting predictions.
+4. Enter your [first Kaggle competition](https://www.kaggle.com/c/digit-recognizer), recognizing hand-written numbers with the classic MNIST dataset. We have prepared [this guide](https://github.com/tensorflow-northwest/kaggle/blob/master/getting_started.md) for entering the competition, building your first kernel, and submitting predictions.
 
 If any of these steps is beyond your capabilities, please see the resources section below. Also feel free to reach out on the slack workspace, and come to the [subgroup meetings](https://www.meetup.com/TensorFlow-Northwest/)! We meet the 1st and 3rd Saturdays of every month at [The Tech Academy Portland](https://www.learncodinganywhere.com/).
 
