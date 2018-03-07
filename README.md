@@ -40,6 +40,7 @@ If you are new to Python, we recommend the following:
 If you are new to TensorFlow:
 * Google’s [Machine Learning Crash Course](https://developers.google.com/machine-learning/crash-course/) with TensorFlow (free).
 * Google's [TensorFlow tutorials](https://www.tensorflow.org/tutorials/) (free).
+* Stanford's [cs20: TensorFlow for Deep Learning Research](https://web.stanford.edu/class/cs20si/) provides course slides, lecture notes, and code-alongs for free.
 
 New to machine learning? Check out:
 * Google’s [Machine Learning Crash Course](https://developers.google.com/machine-learning/crash-course/) with TensorFlow (free).
