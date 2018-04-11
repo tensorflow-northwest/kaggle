@@ -33,8 +33,10 @@ If you are new to python, TensorFlow, machine learning or deep learning, please 
 
 If you are new to Python, we recommend the following:
 * A (very) brief, but free crash course at [learnpython.org](https://www.learnpython.org/).
+* MIT's [Introduction to Computer Science and Programming Using Python](https://www.edx.org/course/introduction-computer-science-mitx-6-00-1x-11).
 * Jose Portilla’s [Python for Data Science and Machine Learning Bootcamp](https://www.udemy.com/python-for-data-science-and-machine-learning-bootcamp/) on [Udemy](https://www.udemy.com/) (typically less than $20).
 * [Mode Analytics](https://modeanalytics.com/) [free Python tutorial](https://community.modeanalytics.com/python/).
+* Codecademy's [introduction to Python](https://www.codecademy.com/learn/learn-python).
 <!--- Might also suggest codefights or hackerearth for practicing python skills as well? --->
 
 If you are new to TensorFlow:
