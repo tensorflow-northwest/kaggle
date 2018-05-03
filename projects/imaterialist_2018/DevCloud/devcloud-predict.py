@@ -92,6 +92,6 @@ filename = save_preds(predictions)
 for i in range(20):
     print(i, predictions[i])
     
-print('File <{}> saved.'.format(filename)
+print('File <{}> saved.'.format(filename))
 
 print('Elapsed time: {}'.format(elapsed(start_time)))
