@@ -1,8 +1,9 @@
 #PBS -l nodes=1:ppn=2
 #PBS -l walltime=24:00:00
 #PBS -m abe
-#PBS -M your_email@host.com
+#PBS -M your_email@domain.com
 
-   cd $PBS_O_WORKDIR
-  
-python im.py $1
+  cd $PBS_O_WORKDIR
+  cp -R $PBS_O_WORKDIR/nasnet/data/ $PBS_SCRATCHDIR/
+
+  python im.py $PBS_SCRATCHDIR
