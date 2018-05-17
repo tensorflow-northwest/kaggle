@@ -338,7 +338,7 @@ parser.add_argument('--raw_file', help = 'File name to save prediction \
 probability matrices under (if desired).', default = None)
 parser.add_argument('--tta_model', help = 'Name of model to generate predictions \
 from probability matrices. Default assumes it is stored in predictions directory \
-of model_path.', default = 'predictions/tta_model.h5')
+of model_path.', default = 'tta_model.h5')
 parser.add_argument('--data_file', help = 'Path and file of images.',
                    default = "nasnet/data/eval_dataset.h5")
 parser.add_argument('--data_key', help = 'h5 key (or list of 2 keys) to access \
