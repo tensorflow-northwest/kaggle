@@ -310,6 +310,9 @@ missing images. Default will be a sequence of random values.',
 # read arguments from the command line and assign appropriate values
 args = parser.parse_args()
 
+if args.verbose > 0:
+    print('Initializing arguments...')
+
 if args.transforms is None:
     transforms = [dummy_func, flip_horiz, *[static_shift]*4,
                   *[static_rotation]*4, *[static_shear]*2, *[static_zoom]*3]
