@@ -115,7 +115,8 @@ def transform_matrix_offset_center(matrix, x, y):
 
 class ThreadedModel:
     def __init__(self, model_path, train_mean = None, train_std = None,
-                 weights = None, bs = 100, p_threads = 5, verbose = False):
+                 weights = None, bs = 100, p_threads = 5, frozen = False,
+                 verbose = False):
         'Loads model, then predicts on dummy data so keras can build GPU function'
 
         self.model = load_model(model_path)
@@ -128,11 +129,13 @@ class ThreadedModel:
         self.verbose = verbose
         self.simple_scale = train_mean is None or train_std is None
         self.predictions = [None]*self.p_threads
-        self.model.predict(np.zeros(shape=(self.bs,224,224,3),dtype=np.float32),
-                           batch_size=self.bs)
-        self.session = K.get_session()
-        self.graph = tf.get_default_graph()
-        self.graph.finalize()
+        self.frozen = frozen
+        if self.frozen:
+            self.model.predict(np.zeros(shape=(self.bs,224,224,3),
+                                        dtype=np.float32), batch_size=self.bs)
+            self.session = K.get_session()
+            self.graph = tf.get_default_graph()
+            self.graph.finalize()
 
     def preproccesing(self, X):
         'Scale data conditionally'
@@ -152,13 +155,20 @@ class ThreadedModel:
         if self.verbose:
             print('Thread {} took {} to preprocess'\
                   .format(thread_num,elapsed(start_time)))
-        with self.session.as_default():
-            with self.graph.as_default():
-                self.predictions[thread_num] = \
-                self.model.predict(X_scale, batch_size = self.bs)
-                if self.verbose:
-                    print('Thread {} complete. Total time: {}'\
-                          .format(thread_num, elapsed(start_time)))
+        if self.frozen:
+            with self.session.as_default():
+                with self.graph.as_default():
+                    self.predictions[thread_num] = \
+                    self.model.predict(X_scale, batch_size = self.bs)
+                    if self.verbose:
+                        print('Thread {} complete. Total time: {}'\
+                              .format(thread_num, elapsed(start_time)))
+        else:
+            self.predictions[thread_num] = \
+                    self.model.predict(X_scale, batch_size = self.bs)
+                    if self.verbose:
+                        print('Thread {} complete. Total time: {}'\
+                              .format(thread_num, elapsed(start_time)))
                     
                     
 def get_transform_preds(model_file = 'xception-cut6-5.h5',
@@ -173,6 +183,7 @@ def get_transform_preds(model_file = 'xception-cut6-5.h5',
                         img_offset = 0,
                         transforms = [dummy_func],
                         tr_vals = ['asdf'],
+                        frozen = False,
                         verbose = 0):
     '''
     Predicts images on a frozen graph of given model over given transformations.
@@ -187,7 +198,8 @@ def get_transform_preds(model_file = 'xception-cut6-5.h5',
     predictions = [None]*len(transforms)
 
     xmodel = ThreadedModel(model_file,train_mean,train_std, weights = weights,
-                           p_threads = num_threads, verbose = verbose > 1)
+                           p_threads = num_threads, frozen = frozen,
+                           verbose = verbose > 1)
 
     with h5py.File(data_file, 'r') as hf:
         # Open connection to images
@@ -306,6 +318,8 @@ parser.add_argument('-v', '--verbose', help = 'Verbosity of program. 0 is silent
 parser.add_argument('--missing_fill', help = 'Class label to predict for \
 missing images. Default will be a sequence of random values.',
                     type = int, default = None)
+parser.add_argument('-f', '--frozen', help = "Finalize tf graph",
+                    action = 'store_true', default = False)
 
 # read arguments from the command line and assign appropriate values
 args = parser.parse_args()
@@ -344,7 +358,8 @@ if tf.device('/CPU:0'):
                         swap_classes=args.swap_classes,
                         train_mean=train_mean, train_std=train_std,
                         img_offset=args.img_offset, transforms=transforms,
-                        tr_vals=tr_vals, verbose=args.verbose)
+                        tr_vals=tr_vals, frozen = args.frozen,
+                        verbose=args.verbose)
 
 if args.raw_file:
     raw_path = 'nasnet/predictions/raw_predictions'
