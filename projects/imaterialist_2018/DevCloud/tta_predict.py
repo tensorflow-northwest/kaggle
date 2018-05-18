@@ -193,7 +193,9 @@ def get_transform_preds(model_file = 'xception-cut6-5.h5',
     Returns ndarray of class probabilities with dimensions:
         (num_images, num_transformations, num_classes, 1)
     '''
-    K.clear_session()
+    if frozen:
+        K.clear_session()
+        
     full_start = time.time()
     predictions = [None]*len(transforms)
 
