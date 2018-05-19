@@ -115,27 +115,22 @@ def transform_matrix_offset_center(matrix, x, y):
 
 class ThreadedModel:
     def __init__(self, model_path, train_mean = None, train_std = None,
-                 weights = None, bs = 100, p_threads = 5, frozen = False,
-                 verbose = False):
+                 weights = None, bs = 100):
         'Loads model, then predicts on dummy data so keras can build GPU function'
 
         self.model = load_model(model_path)
+        self.graph = tf.get_default_graph
         if weights:
             self.model.load_weights(weights)
         self.train_mean = train_mean
         self.train_std = train_std
         self.bs = bs
-        self.p_threads = p_threads
-        self.verbose = verbose
         self.simple_scale = train_mean is None or train_std is None
-        self.predictions = [None]*self.p_threads
-        self.frozen = frozen
-        if self.frozen:
-            self.model.predict(np.zeros(shape=(self.bs,224,224,3),
-                                        dtype=np.float32), batch_size=self.bs)
-            self.session = K.get_session()
-            self.graph = tf.get_default_graph()
-            self.graph.finalize()
+        self.model.predict(np.zeros(shape=(self.bs,224,224,3),
+                                    dtype=np.float32), batch_size=self.bs)
+        self.session = K.get_session()
+        self.graph = tf.get_default_graph()
+        self.graph.finalize()
 
     def preproccesing(self, X):
         'Scale data conditionally'
@@ -148,42 +143,25 @@ class ThreadedModel:
             X /= self.train_std
         return X
 
-    def thread_predict(self, data, thread_num):
+    def frozen_predict(self, data):
         'Runs predict method of model'
-        start_time = time.time()
         X_scale = self.preproccesing(data)
-        if self.verbose:
-            print('Thread {} took {} to preprocess'\
-                  .format(thread_num,elapsed(start_time)))
-        if self.frozen:
-            with self.session.as_default():
-                with self.graph.as_default():
-                    self.predictions[thread_num] = \
-                    self.model.predict(X_scale, batch_size = self.bs)
-                    if self.verbose:
-                        print('Thread {} complete. Total time: {}'\
-                              .format(thread_num, elapsed(start_time)))
-        else:
-            self.predictions[thread_num] = \
-                    self.model.predict(X_scale, batch_size = self.bs)
-                    if self.verbose:
-                        print('Thread {} complete. Total time: {}'\
-                              .format(thread_num, elapsed(start_time)))
-                    
+        with self.session.as_default():
+            with self.graph.as_default():
+                return self.model.predict(X_scale, batch_size = self.bs)
                     
 def get_transform_preds(model_file = 'xception-cut6-5.h5',
                         weights = None,
                         data_file = '../iMaterialist/eval_dataset.h5',
                         data_key = 'test_dataset',
                         num_images = 12801,
-                        num_threads = 1,
                         batch_size = 100,
                         swap_classes = True,
                         train_mean = None, train_std = None,
                         img_offset = 0,
                         transforms = [dummy_func],
                         tr_vals = ['asdf'],
-                        frozen = False,
+                        faster = False,
                         verbose = 0):
     '''
     Predicts images on a frozen graph of given model over given transformations.
@@ -193,72 +171,70 @@ def get_transform_preds(model_file = 'xception-cut6-5.h5',
     Returns ndarray of class probabilities with dimensions:
         (num_images, num_transformations, num_classes, 1)
     '''
-    if frozen:
-        K.clear_session()
         
     full_start = time.time()
     predictions = [None]*len(transforms)
-
-    xmodel = ThreadedModel(model_file,train_mean,train_std, weights = weights,
-                           p_threads = num_threads, frozen = frozen,
-                           verbose = verbose > 1)
+    
+    ####################### USED FOR FOR FASTER VERSION ######################
+    if faster:
+        K.clear_session()
+        xmodel = ThreadedModel(model_file,train_mean,train_std, weights = weights)
+    ##########################################################################
 
     with h5py.File(data_file, 'r') as hf:
         # Open connection to images
         if type(data_key) == str:
-            images = hf[data_key]
+            images = hf[data_key][img_offset:num_images].astype(np.uint8, copy = False)
         elif type(data_key) == list and len(data_key) == 2:
-            images = hf[data_key[0]][data_key[1]]
+            images = hf[data_key[0]][data_key[1]][img_offset:num_images].astype(np.uint8, copy = False)
         else:
             print('Uninterprettable input for data_key: {}.\nMust be a\
             string or list of 2 strings.'.format(data_key))
             del xmodel
             return None
-        if verbose > 0:
+        if faster and verbose > 0:
             print('Loaded data and model in:', elapsed(full_start))
         data_start = time.time()
 
-        # Create batch size based ranges for each thread.
-        # Give last thread remainder of images.
-        full_batches = num_images // batch_size
-        batches_per_thread = full_batches // num_threads
-        im_per_t = batches_per_thread * batch_size
-        extra = num_images % (im_per_t)
-
-        # start threads, each thread runs model predict on range of images
+        
+        # Predict on each batch of image transforms
         for j, transform in enumerate(transforms):
 
-            threads = [None] * num_threads
             pred_tr_start = time.time()
-
-            for i in range(num_threads):
-                start_ix = im_per_t*i + img_offset
-                end_ix = im_per_t*(i + 1) + img_offset \
-                    +max(0,i + 2 - num_threads)*extra # add extra to last thread
-                threads[i] = t.Thread(target=xmodel.thread_predict,
-                  kwargs={'data': np.array([transform(img,tr_vals[j]) for img \
-                    in images[start_ix:end_ix].astype(np.uint8, copy = False)]),
-                                            'thread_num': i})
-                threads[i].start()
-
-            # wait for threads to finish  
-            for i in range(num_threads):
-                threads[i].join()
+            
+            ################### DONT USE FOR FASTER VERSION ################
+            if not faster:
+                K.clear_session()
+                xmodel = ThreadedModel(model_file,train_mean,train_std,
+                                       weights = weights)
+                if verbose > 0:
+                    if j == 0:
+                        print('Loaded data and model in:', elapsed(full_start))
+                    else:
+                        print('Reloaded model in:', elapsed(pred_tr_start))
+            ################################################################
+            
+            tr_images = np.array([transform(img,tr_vals[j]) for img in images])
+            predictions[j] = xmodel.frozen_predict(data = tr_images)
+            if not faster:
+                del xmodel
 
             if verbose > 0:
                 print('Predictions for transform number {} -- complete! Time: {}'\
                       .format(j+1, elapsed(pred_tr_start)))
-            y_probs = np.concatenate(xmodel.predictions)
-            predictions[j] = y_probs
 
     if verbose > 0:
         print('Total time:',elapsed(full_start))
-    predictions = np.concatenate([np.reshape(p,(p.shape[0],1,128)) for p in predictions],1)
+    
+    full_preds = [p.reshape(num_images - img_offset,1,128) for p in predictions]
+    matrix_preds = np.concatenate(full_preds,1)
     if swap_classes:
-        predictions = predictions[:, :, [127, *np.arange(1,127), 0]]
-    predictions = predictions.reshape((*predictions.shape,1))
-    del xmodel
-    return predictions
+        matrix_preds = matrix_preds[:, :, [127, *np.arange(1,127), 0]]
+    matrix_preds = matrix_preds.reshape((*matrix_preds.shape,1))
+    if faster:
+        del xmodel
+    return matrix_preds
+
 start_time=time.time()
 
 # initiates parser with program description for help argument.
@@ -288,10 +264,6 @@ parser.add_argument('--num_images', help = 'The number of images to run \
 predictions on.', type = int, default = 12801)
 parser.add_argument('--img_offset', help = 'Starting index for images \
 predictions on (in case of memory limitations).', type = int, default = 0)
-parser.add_argument('--num_threads', help = 'Number of threads to use for \
-making predictions. At the cost of memory, can speed up operations that involve \
-extensive computations outside of the interpretter.',
-                    type = int, default = 1)
 parser.add_argument('--batch_size', help = 'Batch size for model predict method',
                     type = int, default = 100)
 parser.add_argument('-s','--swap_classes', help = 'Whether to swap prediction \
@@ -320,8 +292,8 @@ parser.add_argument('-v', '--verbose', help = 'Verbosity of program. 0 is silent
 parser.add_argument('--missing_fill', help = 'Class label to predict for \
 missing images. Default will be a sequence of random values.',
                     type = int, default = None)
-parser.add_argument('-f', '--frozen', help = "Finalize tf graph",
-                    action = 'store_true', default = False)
+parser.add_argument('-f','--faster', help = 'Speed up predictions \
+at the risk of stability)', action = 'store_true', default = False)
 
 # read arguments from the command line and assign appropriate values
 args = parser.parse_args()
@@ -355,13 +327,11 @@ if tf.device('/CPU:0'):
     raw_preds = get_transform_preds(model_file=model_file, weights=weights,
                         data_file=args.data_file, data_key=args.data_key,
                         num_images=args.num_images,
-                        num_threads=args.num_threads,
-                        batch_size=args.batch_size,
+                        batch_size=args.batch_size, faster = args.faster,
                         swap_classes=args.swap_classes,
                         train_mean=train_mean, train_std=train_std,
                         img_offset=args.img_offset, transforms=transforms,
-                        tr_vals=tr_vals, frozen = args.frozen,
-                        verbose=args.verbose)
+                        tr_vals=tr_vals, verbose=args.verbose)
 
 if args.raw_file:
     raw_path = 'nasnet/predictions/raw_predictions'
