@@ -17,7 +17,6 @@ from keras import backend as K
 
 import tensorflow as tf
 
-import threading as t
 import numpy as np
 import pandas as pd
 import scipy.ndimage as ndi
@@ -173,7 +172,7 @@ def get_transform_preds(model_file = 'xception-cut6-5.h5',
     '''
         
     full_start = time.time()
-    predictions = [None]*len(transforms)
+    
     
     ####################### USED FOR FOR FASTER VERSION ######################
     if faster:
@@ -195,7 +194,9 @@ def get_transform_preds(model_file = 'xception-cut6-5.h5',
         if faster and verbose > 0:
             print('Loaded data and model in:', elapsed(full_start))
         data_start = time.time()
-
+        
+        predictions = [None]*len(transforms)
+        print('Total predictions to make --', len(transforms))
         
         # Predict on each batch of image transforms
         for j, transform in enumerate(transforms):
@@ -216,6 +217,7 @@ def get_transform_preds(model_file = 'xception-cut6-5.h5',
             
             tr_images = np.array([transform(img,tr_vals[j]) for img in images])
             predictions[j] = xmodel.frozen_predict(data = tr_images)
+            print('pred return type:',type(predictions[j]), '--dims--', np.array(predictions[j]).shape)
             if not faster:
                 del xmodel
 
@@ -223,17 +225,17 @@ def get_transform_preds(model_file = 'xception-cut6-5.h5',
                 print('Predictions for transform number {} -- complete! Time: {}'\
                       .format(j+1, elapsed(pred_tr_start)))
 
-    if verbose > 0:
-        print('Total time:',elapsed(full_start))
-    
-    full_preds = [p.reshape(num_images - img_offset,1,128) for p in predictions]
-    matrix_preds = np.concatenate(full_preds,1)
-    if swap_classes:
-        matrix_preds = matrix_preds[:, :, [127, *np.arange(1,127), 0]]
-    matrix_preds = matrix_preds.reshape((*matrix_preds.shape,1))
-    if faster:
-        del xmodel
-    return matrix_preds
+        if verbose > 0:
+            print('Total time:',elapsed(full_start))
+
+        full_preds = [np.array(p).reshape(num_images - img_offset,1,128) for p in predictions]
+        matrix_preds = np.concatenate(full_preds,1)
+        if swap_classes:
+            matrix_preds = matrix_preds[:, :, [127, *np.arange(1,127), 0]]
+        matrix_preds = matrix_preds.reshape((*matrix_preds.shape,1))
+        if faster:
+            del xmodel
+        return matrix_preds
 
 start_time=time.time()
 
