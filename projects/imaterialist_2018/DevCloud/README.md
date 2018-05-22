@@ -48,11 +48,11 @@ group 'test' where images are stored.
 |--verbose| -v | | 0 | Verbosity of program. 0 is silent, 1 will report on all transforms and major steps. 2 extends 1 to include wall-of-text training report of 1k epochs.|
 |--faster|-f| | | Speed up predictions at the risk of stability. *You've got to ask yourself one question: Do I feel lucky*|
 	
-**\* -- Note on --transforms and tr_vals:**
+**\* -- Note on --transforms and --tr_vals:**
 These will default to a predetermined set of 15 static transforms (the first of which returns the original images unchanged):
 
 >> `transforms = [dummy_func, flip_horiz, *[static_shift]*4,
->>                  *[static_rotation]*4, *[static_shear]*2, *[static_zoom]*3]
+>>                  *[static_rotation]*4, *[static_shear]*2, *[static_zoom]*3]  
 >> tr_vals = ['dummy_val',0, (.2,0.0), (0.0,.2),(-.2,0.0), (0.0,-.2), 20,-20,
 >>           40, -40, 15, -15, (.8,.8), (.8,1.0), (1.0,.8)]`
 	       
