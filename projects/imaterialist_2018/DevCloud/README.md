@@ -52,7 +52,8 @@ group 'test' where images are stored.
 These will default to a predetermined set of 15 static transforms (the first of which returns the original images unchanged):
 
 >> `transforms = [dummy_func, flip_horiz, *[static_shift]*4,
->>                  *[static_rotation]*4, *[static_shear]*2, *[static_zoom]*3]  
+>>                  *[static_rotation]*4, *[static_shear]*2, *[static_zoom]*3]
+
 >> tr_vals = ['dummy_val',0, (.2,0.0), (0.0,.2),(-.2,0.0), (0.0,-.2), 20,-20,
 >>           40, -40, 15, -15, (.8,.8), (.8,1.0), (1.0,.8)]`
 	       
