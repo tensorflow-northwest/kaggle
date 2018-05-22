@@ -114,7 +114,7 @@ def transform_matrix_offset_center(matrix, x, y):
 
 class ThreadedModel:
     def __init__(self, model_path, train_mean = None, train_std = None,
-                 weights = None, bs = 100):
+                 weights = None, bs = 100, nasnet = True):
         'Loads model, then predicts on dummy data so keras can build GPU function'
 
         self.model = load_model(model_path)
@@ -124,6 +124,7 @@ class ThreadedModel:
         self.train_mean = train_mean
         self.train_std = train_std
         self.bs = bs
+        self.nasnet = nasnet
         self.simple_scale = train_mean is None or train_std is None
         self.model.predict(np.zeros(shape=(self.bs,224,224,3),
                                     dtype=np.float32), batch_size=self.bs)
@@ -147,7 +148,10 @@ class ThreadedModel:
         X_scale = self.preproccesing(data)
         with self.session.as_default():
             with self.graph.as_default():
-                return self.model.predict(X_scale, batch_size = self.bs)
+                if self.nasnet:
+                    return self.model.predict(X_scale, batch_size = self.bs)[0]
+                else:
+                    return self.model.predict(X_scale, batch_size = self.bs)
                     
 def get_transform_preds(model_file = 'xception-cut6-5.h5',
                         weights = None,
@@ -161,6 +165,7 @@ def get_transform_preds(model_file = 'xception-cut6-5.h5',
                         transforms = [dummy_func],
                         tr_vals = ['asdf'],
                         faster = False,
+                        nasnet = True,
                         verbose = 0):
     '''
     Predicts images on a frozen graph of given model over given transformations.
@@ -217,7 +222,9 @@ def get_transform_preds(model_file = 'xception-cut6-5.h5',
             
             tr_images = np.array([transform(img,tr_vals[j]) for img in images])
             predictions[j] = xmodel.frozen_predict(data = tr_images)
-            print('pred return type:',type(predictions[j]), '--dims--', np.array(predictions[j]).shape)
+            if verbose > 1:
+                print('pred return type:',type(predictions[j]),
+                      '--dims--', np.array(predictions[j]).shape)
             if not faster:
                 del xmodel
 
@@ -228,7 +235,7 @@ def get_transform_preds(model_file = 'xception-cut6-5.h5',
         if verbose > 0:
             print('Total time:',elapsed(full_start))
 
-        full_preds = [np.array(p).reshape(num_images - img_offset,1,128) for p in predictions]
+        full_preds = [p.reshape(num_images - img_offset,1,128) for p in predictions]
         matrix_preds = np.concatenate(full_preds,1)
         if swap_classes:
             matrix_preds = matrix_preds[:, :, [127, *np.arange(1,127), 0]]
@@ -296,6 +303,10 @@ missing images. Default will be a sequence of random values.',
                     type = int, default = None)
 parser.add_argument('-f','--faster', help = 'Speed up predictions \
 at the risk of stability)', action = 'store_true', default = False)
+parser.add_argument('--mode', help = "Whether to generate raw predictions, \
+final predictions, or both. If 'final' is selected, raw_file should refer to an \
+existing file of raw predictions found in nasnet/predictions/raw_predictions",
+                    choices = ['raw','final','both'], default = 'both')
 
 # read arguments from the command line and assign appropriate values
 args = parser.parse_args()
@@ -321,53 +332,63 @@ train_std = np.load(data_path + args.train_std) if args.train_std else None
 
 weights = '{}weights/{}'.format(args.model_path, args.model_weights) if args.model_weights else None
 model_file = args.model_path + args.model_file
+raw_path = 'nasnet/predictions/raw_predictions'
     
 assert len(transforms) == len(tr_vals)
 assert args.batch_size <= args.num_images
+assert tf.device('/CPU:0')
 
-if tf.device('/CPU:0'):
+if args.mode != 'final':
     raw_preds = get_transform_preds(model_file=model_file, weights=weights,
-                        data_file=args.data_file, data_key=args.data_key,
-                        num_images=args.num_images,
-                        batch_size=args.batch_size, faster = args.faster,
-                        swap_classes=args.swap_classes,
-                        train_mean=train_mean, train_std=train_std,
-                        img_offset=args.img_offset, transforms=transforms,
-                        tr_vals=tr_vals, verbose=args.verbose)
+                                    data_file=args.data_file,
+                                    data_key=args.data_key,
+                                    num_images=args.num_images,
+                                    batch_size=args.batch_size,
+                                    faster = args.faster,
+                                    swap_classes=args.swap_classes,
+                                    train_mean=train_mean, train_std=train_std,
+                                    img_offset=args.img_offset,
+                                    transforms=transforms,
+                                    tr_vals=tr_vals, verbose=args.verbose,
+                                    nasnet = True)
 
-if args.raw_file:
-    raw_path = 'nasnet/predictions/raw_predictions'
-    os.makedirs(raw_path, exist_ok=True)
-    np.save('{}/{}.npy'.format(raw_path,args.raw_file),raw_preds)
-    
-model = load_model('nasnet/predictions/{}'.format(args.tta_model))
-tta_pred = model.predict(raw_preds, batch_size = 500, verbose = 1)
-tta_pred = tta_pred.argmax(1)
-tta_pred += 1
-
-df = pd.DataFrame({'id': np.arange(args.img_offset,
-                                   args.img_offset + len(tta_pred)), 
-                   'predicted' : tta_pred})
-
-with h5py.File(args.data_file, 'r') as hf:
-    missing = hf['missing'][:]
-
-# could have skipped this filter step and sliced hf on those indices, but
-# wanted to protect against missing id's being out of order
-missing = [m for m in missing if args.img_offset <= m <= (args.img_offset + args.num_images)]
-if args.missing_fill:
-    df.iloc[missing, 1] = args.missing_fill
+    if args.raw_file:
+        os.makedirs(raw_path, exist_ok=True)
+        np.save('{}/{}.npy'.format(raw_path,args.raw_file),raw_preds)
 else:
-    df.iloc[missing, 1] = np.random.randint(1,129, size = len(missing))
+    raw_file = args.raw_file[:-4] if args.raw_file.endswith('.npy') else args.raw_file
+    raw_preds = np.load('{}/{}.npy'.format(raw_path,raw_file))
 
-df_missing.drop(index=0,inplace = True)
+if args.mode != 'raw':
+    model = load_model('nasnet/predictions/{}'.format(args.tta_model))
+    tta_pred = model.predict(raw_preds, batch_size = 500, verbose = 1)
+    tta_pred = tta_pred.argmax(1)
+    tta_pred += 1
+
+    df = pd.DataFrame({'id': np.arange(args.img_offset,
+                                       args.img_offset + len(tta_pred)), 
+                       'predicted' : tta_pred})
+
+    with h5py.File(args.data_file, 'r') as hf:
+        missing = hf['missing'][:]
+
+    # could have skipped this filter step and sliced hf on those indices, but
+    # wanted to protect against missing id's being out of order
+    missing = [m for m in missing if args.img_offset <= m <= (args.img_offset + args.num_images)]
+    if args.missing_fill:
+        df.iloc[missing, 1] = args.missing_fill
+    else:
+        df.iloc[missing, 1] = np.random.randint(1,129, size = len(missing))
+
+    df_missing.drop(index=0,inplace = True)
 
 
-os.makedirs('nasnet/predictions', exist_ok=True)
-filename = 'nasnet/predictions/tfnw-preds_' + time.strftime('%Y%m%d_%H%M%S_%Z.csv')
-df.to_csv(filename, index=False)
+    os.makedirs('nasnet/predictions', exist_ok=True)
+    filename = 'nasnet/predictions/tfnw-preds_' + time.strftime('%Y%m%d_%H%M%S_%Z.csv')
+    df.to_csv(filename, index=False)
 
+    if args.verbose > 0:
+        print('Sample predictions:\n',df.head(10))
+        print('File {} saved.'.format(filename))
 if args.verbose > 0:
-    print('Sample predictions:\n',df.head(10))
-    print('File {} saved.'.format(filename))
     print('Elapsed time: {}'.format(elapsed(start_time)))
