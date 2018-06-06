@@ -62,7 +62,7 @@ test_datagen = ImageDataGenerator(preprocessing_function=preprocess_input)
 evaluate = False
 
 if evaluate:
-	from nasnet.image import ImageDataGenerator
+	from image import ImageDataGenerator
 	# generator for reading validation data from folder
 	validation_generator = test_datagen.flow_from_directory(
 		'files/train_val',
