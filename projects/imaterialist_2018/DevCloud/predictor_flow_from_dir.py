@@ -7,8 +7,6 @@
 
 # ## TFNW
 
-# @davidhttps://hub.colfaxresearch.com/user/u14913/edit/predictor.py#
-
 # # Predict and Create Submission file
 
 #### Home Directory ###
